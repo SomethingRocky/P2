@@ -4,10 +4,14 @@
 
 import numpy as np
 
-def xCondCoeff(coeff: float, matrixSize: int, plateDisc: dict, zConfines: tuple) -> np.ndarray:
+def dTdx(coeff: float, 
+         matrixSize: int, 
+         matrix2dSize : int, 
+         plateDisc: dict, 
+         zConfines: tuple) -> np.ndarray:
+    
     
     coeffMatrix = np.zeros((matrixSize,matrixSize))
-    Matrix2dSize = plateDisc["x"] * plateDisc["y"]
     
     #dT/dx
     xCoeffVector = np.zeros(matrixSize)
@@ -16,7 +20,7 @@ def xCondCoeff(coeff: float, matrixSize: int, plateDisc: dict, zConfines: tuple)
     #Rolling it back to match with the centered difference method
     xCoeffVector = np.roll(xCoeffVector, -1)
     
-    for row in range(Matrix2dSize * zConfines[0], Matrix2dSize * zConfines[1]):
+    for row in range(matrix2dSize * zConfines[0], matrix2dSize * zConfines[1]):
         if row % plateDisc["x"] == 0:
             #Forward difference method
             coeffMatrix[row] = np.roll(xCoeffVector, row + 1)
@@ -30,10 +34,14 @@ def xCondCoeff(coeff: float, matrixSize: int, plateDisc: dict, zConfines: tuple)
     return coeffMatrix
             
     
-def yCondCoeff(coeff: float, matrixSize: int, plateDisc: dict, zConfines: tuple) -> np.ndarray:
+def dtdy(coeff: float, 
+         matrixSize: int, 
+         matrix2dSize: int, 
+         plateDisc: dict, 
+         zConfines: tuple) -> np.ndarray:
     
     coeffMatrix = np.zeros((matrixSize,matrixSize))
-    Matrix2dSize = plateDisc["x"] * plateDisc["y"]
+
     
     #dT/dy
     yCoeffVector = np.zeros(matrixSize)
@@ -44,8 +52,8 @@ def yCondCoeff(coeff: float, matrixSize: int, plateDisc: dict, zConfines: tuple)
     yCoeffVector[plateDisc["x"]] = coeff
     
  
-    for row in range(Matrix2dSize * zConfines[0], Matrix2dSize * zConfines[1]):
-        yLevel = row % Matrix2dSize
+    for row in range(matrix2dSize * zConfines[0], matrix2dSize * zConfines[1]):
+        yLevel = row % matrix2dSize
         if yLevel < plateDisc["x"]:
             #Forward difference method
             coeffMatrix[row] += np.roll(yCoeffVector, row + plateDisc["x"])
@@ -57,13 +65,16 @@ def yCondCoeff(coeff: float, matrixSize: int, plateDisc: dict, zConfines: tuple)
             coeffMatrix[row] += np.roll(yCoeffVector, row)
     
     return coeffMatrix
+
     
-    
-    
-def zCondCoeff(coeff: float, matrixSize: int, plateDisc: dict, zConfines: tuple) -> np.ndarray:
+def dtdz(coeff: float, 
+         matrixSize: int,
+         matrix2dSize: int, 
+         plateDisc: dict, 
+         zConfines: tuple) -> np.ndarray:
     
     coeffMatrix = np.zeros((matrixSize,matrixSize))
-    matrix2dSize = plateDisc["x"] * plateDisc["y"]
+
     
     #dT/dz
     zCoeffVector = np.zeros(matrixSize)
@@ -86,14 +97,33 @@ def zCondCoeff(coeff: float, matrixSize: int, plateDisc: dict, zConfines: tuple)
     return coeffMatrix
 
 
-
-def heatCondCoeff(α: float, plateDisc: dict, dx: float, dy: float, dz: float):
+def heatConvCoeff(h: float, 
+                  k: float,
+                  density: float,  
+                  area: float, 
+                  matrixSize: int,
+                  matrix2dSize: int,
+                  dx: float, dy: float, dz: float):
+    """"""
+    coeffMatrix = np.zeros((matrixSize,matrixSize))
     
-    matrixSize = plateDisc["x"] * plateDisc["y"] * plateDisc["z"]
+    coeff = (h * area)/(density * dx * dy * dz * k)
     
-
-def heatConvCoeff(h: float, area: float, plateDisc: dict, dx: float, dy: float, dz: float):
-    pass
+    aboveCoeffVector = np.zeros(matrixSize)
+    aboveCoeffVector[0] = coeff 
+    aboveCoeffVector[matrix2dSize] = -coeff
+    
+    belowCoeffVector = np.zeros(matrixSize)
+    belowCoeffVector[0] = -coeff
+    belowCoeffVector[matrix2dSize] = coeff
+    
+    for row in range(matrix2dSize):
+        coeffMatrix[row] = np.roll(aboveCoeffVector, row)
+        coeffMatrix[row + matrix2dSize] = np.roll(belowCoeffVector, row)
+        coeffMatrix[-(row + 1 + matrix2dSize)] = np.roll(aboveCoeffVector, -(row + 1 + matrix2dSize))
+        coeffMatrix[-(row + 1)] = np.roll(belowCoeffVector, -(row + 1 + matrix2dSize))
+        
+    return coeffMatrix
 
 
 class CFPHE_plate:
@@ -106,3 +136,4 @@ class CFPHE_plate:
                  simTime: float,
                  ):
         pass
+    
