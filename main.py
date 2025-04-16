@@ -6,11 +6,11 @@ import numpy as np
 
 def xCondCoeff(coeff: float, matrixSize: int, plateDisc: dict, zConfines: tuple) -> np.ndarray:
     
-    coeffMatrix = np.array((plateDisc["z"], plateDisc["y"], plateDisc["x"]))
+    coeffMatrix = np.zeros((matrixSize,matrixSize))
     Matrix2dSize = plateDisc["x"] * plateDisc["y"]
     
     #dT/dx
-    xCoeffVector = np.zeros(Matrix2dSize)
+    xCoeffVector = np.zeros(matrixSize)
     
     xCoeffVector[:3] = [coeff, -2*coeff, coeff]
     #Rolling it back to match with the centered difference method
@@ -29,16 +29,14 @@ def xCondCoeff(coeff: float, matrixSize: int, plateDisc: dict, zConfines: tuple)
             
     return coeffMatrix
             
-        
-        
     
 def yCondCoeff(coeff: float, matrixSize: int, plateDisc: dict, zConfines: tuple) -> np.ndarray:
     
-    coeffMatrix = np.array((plateDisc["z"], plateDisc["y"], plateDisc["x"]))
+    coeffMatrix = np.zeros((matrixSize,matrixSize))
     Matrix2dSize = plateDisc["x"] * plateDisc["y"]
     
     #dT/dy
-    yCoeffVector = np.zeros(Matrix2dSize)
+    yCoeffVector = np.zeros(matrixSize)
     
 
     yCoeffVector[-plateDisc["x"]] = coeff
@@ -64,26 +62,28 @@ def yCondCoeff(coeff: float, matrixSize: int, plateDisc: dict, zConfines: tuple)
     
 def zCondCoeff(coeff: float, matrixSize: int, plateDisc: dict, zConfines: tuple) -> np.ndarray:
     
-    coeffMatrix = np.array((plateDisc["z"], plateDisc["y"], plateDisc["x"]))
-    Matrix2dSize = plateDisc["x"] * plateDisc["y"]
+    coeffMatrix = np.zeros((matrixSize,matrixSize))
+    matrix2dSize = plateDisc["x"] * plateDisc["y"]
     
     #dT/dz
-    zCoeffVector = np.zeros((Matrix2dSize))
+    zCoeffVector = np.zeros(matrixSize)
     
-    zCoeffVector[-(plateDisc["x"] * plateDisc["y"])] = coeff
+    zCoeffVector[-matrix2dSize] = coeff
     zCoeffVector[0] = -2 * coeff
-    zCoeffVector[plateDisc["x"] * plateDisc["y"]] = coeff
+    zCoeffVector[matrix2dSize] = coeff
     
-    for row in range(Matrix2dSize * zConfines[0], Matrix2dSize * zConfines[1]):
-        if row % Matrix2dSize == 0:
+    for row in range(matrix2dSize * zConfines[0], matrix2dSize * zConfines[1]):
+        if row % matrix2dSize == 0:
             #Forward difference method
-            coeffMatrix[row] = np.roll(zCoeffVector, row + 1)
-        elif row % Matrix2dSize == Matrix2dSize - 1:
+            coeffMatrix[row] = np.roll(zCoeffVector, row + matrix2dSize)
+        elif row % matrix2dSize == matrix2dSize - 1:
             #Backward difference method
-            coeffMatrix[row] = np.roll(zCoeffVector, row - 1)
+            coeffMatrix[row] = np.roll(zCoeffVector, row - matrix2dSize)
         else:
             #Centered difference method
             coeffMatrix[row] = np.roll(zCoeffVector, row)
+
+    return coeffMatrix
 
 
 
