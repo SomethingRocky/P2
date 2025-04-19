@@ -52,7 +52,7 @@ def dTdx(coeff: float,
     return coeffMatrix
             
     
-def dtdy(coeff: float, 
+def dTdy(coeff: float, 
          matrixSize: int, 
          matrix2dSize: int, 
          plateDisc: dict, 
@@ -99,7 +99,7 @@ def dtdy(coeff: float,
     return coeffMatrix
 
     
-def dtdz(coeff: float, 
+def dTdz(coeff: float, 
          matrixSize: int,
          matrix2dSize: int, 
          zConfines: tuple) -> np.ndarray:
@@ -208,19 +208,37 @@ def heatConvCoeff(h: float,
     return coeffMatrix
 
 
-
-
+class airProperties:
+    """
+    A class to hold all the properties of the air streams
+    in a cross flow plate heat exchanger.
+    """
+    
+    def __init__(air,
+                 coldAirstream: np.ndarray,
+                 hotAirstream: np.ndarray,
+                 airSpeed: float,
+                 airDensity: float,
+                 airThermalConductivity: float,
+                 airHeight: float):
+        
+        air.speed: float = airSpeed
+        air.coldstream: np.ndarray = coldAirstream
+        air.hotstream: np.ndarray = hotAirstream
+        air.density: float = airDensity
+        air.k: float = airThermalConductivity
+        air.dz:float = airHeight
+        
 
 class CFPHE_plate:
     """
-    
+    This function holds all the functionalities needed
+    to simulate the heat over a CFP heat exchangers plate.
     """
     
     def __init__(plate,
                  startTempMatrix: np.ndarray,
-                 coldAirstream: np.ndarray,
-                 hotAirstream: np.ndarray,
-                 airSpeed: float,           
+                 air: airProperties,       
                  simTime: float,
                  plateThermalDiffusivity: float,
                  plateThermalConductivity: float,
@@ -254,14 +272,14 @@ class CFPHE_plate:
                        "dy": plate.dim["y"] / plate.disc["y"],
                        "dz": plate.dim["z"] / plate.disc["z"]}
         #The amount of time it takes to get from one volume to another
-        plate.diffs["dt"] = min(airSpeed / plate.diffs["dx"], airSpeed / plate.diffs["dy"])
+        plate.diffs["dt"] = min(air.Speed / plate.diffs["dx"], air.Speed / plate.diffs["dy"])
         
         #How many dt's we need to run over the specified time
         #math.ceil() always rounds up to the nearest integer
         timeIntervals = math.ceil(simTime / plate.diffs["dt"])
         
         #Makes the matrix that holds all heat distributions at any time
-        plate.heatMatrix = np.array((timeIntervals,
+        plate.heatMatrix = np.zeros((timeIntervals,
                                      plate.disc["z"],
                                      plate.disc["y"],
                                      plate.disc["x"]))
@@ -274,14 +292,103 @@ class CFPHE_plate:
         plate.h =       convectionHeatTransferCoeff
         plate.density = plateDensity
         
-        #Air properties
-        plate.coldAir = coldAirstream
-        plate.hotAir =  hotAirstream
+        #initializing air, for use in other functions
+        plate.air = air
+        
+        #Calculates the coefficient matrix
+        coeffMatrixSize = plate.disc["z"] * plate.disc["y"] * plate.disc["x"]
+        coeff2dMatrixSize = plate.disc["y"] * plate.disc["x"]
+        
+        #initializing the different coefficient matrices
+        dTdxMatrix = dTdx(
+            plate.alpha / plate.disc["x"],
+            coeffMatrixSize,
+            coeff2dMatrixSize,
+            plate.disc,
+            (1, plate.disc["z"] - 2)
+        )
+        dTdyMatrix = dTdy(
+            plate.alpha / plate.disc["y"],
+            coeffMatrixSize,
+            coeff2dMatrixSize,
+            plate.disc,
+            (1, plate.disc["z"] - 2)
+        )
+        dTdzMatrix = dTdz(
+            plate.alpha / plate.disc["z"],
+            coeffMatrixSize,
+            coeff2dMatrixSize,
+            (1, plate.disc["z"] - 2)
+        )
+        ConvMatrix = heatConvCoeff(
+            plate.h,
+            plate.k,
+            plate.density,
+            plate.air.density,
+            plate.air.k,
+            plate.diffs["dx"] * plate.diffs["dy"],
+            coeffMatrixSize,
+            coeff2dMatrixSize,
+            plate.diffs["dx"],
+            plate.diffs["dy"],
+            plate.diffs["dz"],
+            plate.air.dz
+        )
+        
+        plate.coeffMatrix: np.ndarray = dTdxMatrix + dTdyMatrix + dTdzMatrix + ConvMatrix
         
         
+    def moveAir(plate,
+                dtIndexTime: int) -> None:
+        """
+        Mimics the movement of the air moving in  a CFP heat exchanger
+
+        Args:
+            dtIndexTime (int): the amount of dt's taken 
+        """
+        #Moving the cold air along the x-axis
+        plate.heatMatrix[0] = np.roll(plate.heatMatrix[0], shift = 1, axis = 1)
+        #Replace the starting with new air
+        plate.heatMatrix[0,:,0] = plate.air.coldstream[dtIndexTime]
         
+        #Moving the warm air along the y-axis
+        plate.heatMatrix[-1] = np.roll(plate.heatMatrix[-1], shift = 1, axis = 0)
+        #Replace the starting air with new air
+        plate.heatMatrix[-1,0,:] = plate.air.hotstream[dtIndexTime]
         
+    def getHeatMatrixTimeIndex(plate, secTime: float) -> np.ndarray:
+        """
+        Takes a time in seconds and gives the corresponding heatmatrix
+        for that time index
+
+        Args:
+            secTime (float): Time in seconds
+
+        Returns:
+            np.ndarray: The corresponding heat matrix
+        """
+        return plate.heatMatrix[math.ceil(secTime/plate.diffs["dt"])]
+    
+    def runSimulation(plate) -> None:
         
+        #shape of the heat matrix
+        HeatMatrixShape = plate.heatMatrix[0].shape
         
-        
+        for t in range(len(plate.heatMatrix) - 2):
+            
+            plate.moveAir(t)
+            
+            #Calculating DT/dt
+            Dtdt: np.ndarray = np.dot(plate.coeffMatrix, plate.heatMatrix[t].flatten())
+            
+            addedHeat: np.ndarray = (plate.diffs["dt"] * Dtdt).reshape(HeatMatrixShape)
+            
+            #Then finding T(t+1)
+            plate.heatMatrix[t+1] = plate.heatMatrix[t] + addedHeat
+
+
+if __name__ == "__main__":
+    
+
+
     
